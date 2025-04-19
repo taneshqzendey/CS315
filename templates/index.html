@@ -1,0 +1,70 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>QuickChat</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+</head>
+<body>
+  <h1>Welcome, {{ username }}!</h1>
+
+  <form action="/join" method="POST">
+    <input type="text" name="room" placeholder="Enter Room Name" required />
+    <button type="submit">Join Room</button>
+  </form>
+
+  <h2>Rooms</h2>
+  <ul id="room-list">
+    {% for room in rooms %}
+      <li><button onclick="joinRoom('{{ room }}')">{{ room }}</button></li>
+    {% endfor %}
+  </ul>
+
+  <div id="chat-box" style="display:none;">
+    <h2 id="current-room-name"></h2>
+    <div id="messages"></div>
+    <input type="text" id="message-input" placeholder="Type a message..." />
+    <button onclick="sendMessage()">Send</button>
+  </div>
+
+  <div style="display: flex; justify-content: space-between; align-items: center;">
+    <h1>Welcome, {{ username }}!</h1>
+    <form action="/logout" method="GET">
+      <button type="submit">Logout</button>
+    </form>
+  </div>
+  
+
+  <script>
+    const socket = io();
+    let currentRoom = "";
+
+    function joinRoom(room) {
+      currentRoom = room;
+      document.getElementById("chat-box").style.display = 'block';
+      document.getElementById("current-room-name").innerText = `Room: ${room}`;
+      document.getElementById("messages").innerHTML = '';
+      socket.emit("join_room", { room: room, username: "{{ username }}" });
+    }
+
+    function sendMessage() {
+      const msg = document.getElementById("message-input").value;
+      if (msg.trim() !== "") {
+        socket.emit("send_message", {
+          room: currentRoom,
+          msg: msg,
+          username: "{{ username }}"
+        });
+        document.getElementById("message-input").value = "";
+      }
+    }
+
+    socket.on("message", function (data) {
+      const msgBox = document.getElementById("messages");
+      msgBox.innerHTML += `<div>${data.msg}</div>`;
+      msgBox.scrollTop = msgBox.scrollHeight;
+    });
+  </script>
+</body>
+</html>
