@@ -1,4 +1,4 @@
-<!-- templates/index.html -->
+ <!-- templates/index.html -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -11,15 +11,39 @@
 
   <form action="/join" method="POST">
     <input type="text" name="room" placeholder="Enter Room Name" required />
-    <button type="submit">Join Room</button>
+    <button type="submit">Create Room</button>
   </form>
 
-  <h2>Rooms</h2>
-  <ul id="room-list">
+  <h2>Existing Rooms</h2>
+  <!-- <ul id="room-list">
     {% for room in rooms %}
       <li><button onclick="joinRoom('{{ room }}')">{{ room }}</button></li>
     {% endfor %}
+  </ul>  -->
+  <ul id="room-list">
+    {% for room, creator_id in rooms %}
+      <li id="room-{{ room }}" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; width: 100%;">
+        <button style="flex: 0 0 80%; text-align: left;" disabled>{{ room }}</button>
+        <button style="flex: 0 0 10%;" onclick="joinRoom('{{ room }}')">Join</button>
+        {% if creator_id == user_id %}
+          <button style="flex: 0 0 10%;" onclick="deleteRoom('{{ room }}')">Delete</button>
+        {% endif %}
+      </li>
+    {% endfor %}
   </ul>
+  
+  <!-- Hidden delete form for JS to submit -->
+  <form id="hidden-delete-form" action="/delete_room" method="POST" style="display: none;">
+    <input type="hidden" name="room" id="hidden-delete-room">
+  </form>
+  
+  
+  
+  
+  
+  
+  
+
 
   <div id="chat-box" style="display:none;">
     <h2 id="current-room-name"></h2>
@@ -29,9 +53,8 @@
   </div>
 
   <div style="display: flex; justify-content: space-between; align-items: center;">
-    <h1>Welcome, {{ username }}!</h1>
     <form action="/logout" method="GET">
-      <button type="submit">Logout</button>
+      <button id = "logOutbtn" type="submit" onclick = "logOut()">Logout</button>
     </form>
   </div>
   
@@ -40,13 +63,32 @@
     const socket = io();
     let currentRoom = "";
 
-    function joinRoom(room) {
-      currentRoom = room;
-      document.getElementById("chat-box").style.display = 'block';
-      document.getElementById("current-room-name").innerText = `Room: ${room}`;
-      document.getElementById("messages").innerHTML = '';
-      socket.emit("join_room", { room: room, username: "{{ username }}" });
+  function joinRoom(room) {
+    if(currentRoom == room ) {
+      return // trying to join same room
     }
+    if (currentRoom) {
+      socket.emit("leave_room", { room: currentRoom, username: "{{ username }}" });
+    }
+    currentRoom = room;
+    document.getElementById("chat-box").style.display = 'block';
+    document.getElementById("current-room-name").innerText = `Room: ${room}`;
+    document.getElementById("messages").innerHTML = '';
+    fetch(`/history/${room}`)
+      .then(res => res.json())
+      .then(data => {
+        const msgBox = document.getElementById("messages");
+        data.messages.forEach(entry => {
+          msgBox.innerHTML += `<div>${entry.msg}</div>`;
+        });
+
+        // Now emit join event AFTER loading history
+        socket.emit("join_room", { room: room, username: "{{ username }}" });
+        msgBox.scrollTop = msgBox.scrollHeight;
+      });
+
+}
+
 
     function sendMessage() {
       const msg = document.getElementById("message-input").value;
@@ -60,11 +102,79 @@
       }
     }
 
+
+    function logOut() {
+    if (confirm("Are you sure you want to log out?")) {
+      if (typeof socket !== "undefined") {
+        socket.disconnect();
+      }
+      window.location.href = "/logout";
+    }
+  }
+
     socket.on("message", function (data) {
       const msgBox = document.getElementById("messages");
       msgBox.innerHTML += `<div>${data.msg}</div>`;
       msgBox.scrollTop = msgBox.scrollHeight;
     });
+
+    socket.on('connect', () => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const room = urlParams.get('room');
+    if (room) {
+        currentRoom = room;
+        socket.emit('join_room', { username, room });
+    }
+});
+
+
+socket.on("room_deleted", function (data) {
+    const roomItem = document.getElementById("room-" + data.room);
+    if (roomItem) {
+      roomItem.remove();
+    }
+  });
+
+  socket.on("room_created", function (data) {
+    const roomList = document.getElementById("room-list");
+    if (document.getElementById("room-" + data.room)) return; // Avoid duplicates
+
+    const li = document.createElement("li");
+    li.id = "room-" + data.room;
+    li.style = "display: flex; align-items: center; gap: 10px; margin-bottom: 10px; width: 100%;";
+
+    const nameBtn = document.createElement("button");
+    nameBtn.disabled = true;
+    nameBtn.innerText = data.room;
+    nameBtn.style = "flex: 0 0 80%; text-align: left;";
+
+    const joinBtn = document.createElement("button");
+    joinBtn.innerText = "Join";
+    joinBtn.style = "flex: 0 0 10%;";
+    joinBtn.onclick = () => joinRoom(data.room);
+
+    li.appendChild(nameBtn);
+    li.appendChild(joinBtn);
+
+    // If current user is the creator, allow delete
+    if (data.creator_id == {{ user_id }}) {
+      const delBtn = document.createElement("button");
+      delBtn.innerText = "Delete";
+      delBtn.style = "flex: 0 0 10%;";
+      delBtn.onclick = () => deleteRoom(data.room);
+      li.appendChild(delBtn);
+    }
+
+    roomList.appendChild(li);
+  });
+
+  function deleteRoom(roomName) {
+    if (confirm(`Are you sure you want to delete ${roomName}?`)) {
+      document.getElementById("hidden-delete-room").value = roomName;
+      document.getElementById("hidden-delete-form").submit();
+    }
+  }
   </script>
 </body>
 </html>
+
