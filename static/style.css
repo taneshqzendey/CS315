@@ -37,10 +37,17 @@ button {
     border: none;
 }
 
-button:hover {
-    background-color: #45a049;
+.join:hover {
+    background-color: #2863c3;
 }
 
+.leave:hover {
+    background-color: #c32828;
+}
+
+.send:hover {
+    background-color: hsl(114, 94%, 13%);
+}
 a {
     text-align: center;
     display: block;
