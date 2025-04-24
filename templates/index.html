@@ -73,18 +73,37 @@
       }).then(() => window.location.href = `/?room=${encodeURIComponent(room)}`);
     }
 
-    function leaveRoom(room) {
-      socket.emit('leave_room', { room: currentRoom, username });
-      fetch('/leave', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: new URLSearchParams({ room })
-      }).then(() => {
-    // Clear room from URL and reload
-    window.history.replaceState({}, '', window.location.pathname);
-    window.location.reload();
-  });
+  //   function leaveRoom(room) {
+  //     socket.emit('leave_room', { room: currentRoom, username });
+  //     fetch('/leave', {
+  //       method: 'POST',
+  //       headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+  //       body: new URLSearchParams({ room })
+  //     }).then(() => {
+  //   // Clear room from URL and reload
+  //   window.history.replaceState({}, '', window.location.pathname);
+  //   window.location.reload();
+  // });
+  //   }
+
+  function leaveRoom(room) {
+  socket.emit('leave_room', { room, username }); // <-- use 'room' instead of 'currentRoom'
+  fetch('/leave', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: new URLSearchParams({ room })
+  }).then(() => {
+    if (currentRoom === room) {
+      document.getElementById("chat-box").style.display = 'none';
+      document.getElementById("current-room-name").innerText = '';
+      document.getElementById("messages").innerHTML = '';
+      currentRoom = '';
     }
+    // Reload room list UI only (optional)
+    window.history.replaceState({}, '', window.location.pathname);
+    window.location.reload(); // this works, but you can also dynamically update the DOM if preferred
+  });
+}
 
     function loadchat(room) {
       if (currentRoom == room) return;
