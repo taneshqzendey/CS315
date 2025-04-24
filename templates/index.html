@@ -1,4 +1,3 @@
- <!-- templates/index.html -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -10,171 +9,160 @@
   <h1>Welcome, {{ username }}!</h1>
 
   <form action="/join" method="POST">
-    <input type="text" name="room" placeholder="Enter Room Name" required />
-    <button type="submit">Create Room</button>
+    <input type="text" name="room" placeholder="Enter Room Name" required>
+    <button class="join" type="submit">Create Room</button>
   </form>
 
   <h2>Existing Rooms</h2>
-  <!-- <ul id="room-list">
-    {% for room in rooms %}
-      <li><button onclick="joinRoom('{{ room }}')">{{ room }}</button></li>
-    {% endfor %}
-  </ul>  -->
   <ul id="room-list">
-    {% for room, creator_id in rooms %}
-      <li id="room-{{ room }}" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px; width: 100%;">
-        <button style="flex: 0 0 80%; text-align: left;" disabled>{{ room }}</button>
-        <button style="flex: 0 0 10%;" onclick="joinRoom('{{ room }}')">Join</button>
+    {% for room, room_id, creator_id in rooms %}
+      <li id="room-{{ room }}" style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+        <button style="flex: 0 0 70%; text-align: left;" 
+                onclick="loadchat('{{ room }}')"
+                {% if room_id not in joined_rooms %}disabled {% else %} class="join" {% endif %}>
+          {{ room }}
+        </button>
+        
+        {% if room_id not in joined_rooms %}
+          <button class="join" style="flex: 0 0 10%; text-align: left;" onclick="joinRoom('{{ room }}')">Join</button>
+        {% else %}
+          <button class="leave" style="flex: 0 0 10%; text-align: left;" onclick="leaveRoom('{{ room }}')">Leave</button>
+        {% endif %}
+        
         {% if creator_id == user_id %}
-          <button style="flex: 0 0 10%;" onclick="deleteRoom('{{ room }}')">Delete</button>
+          <button class="delete" style="flex: 0 0 10%; text-align: left;" onclick="deleteRoom('{{ room }}')">Delete</button>
         {% endif %}
       </li>
     {% endfor %}
   </ul>
-  
-  <!-- Hidden delete form for JS to submit -->
-  <form id="hidden-delete-form" action="/delete_room" method="POST" style="display: none;">
-    <input type="hidden" name="room" id="hidden-delete-room">
-  </form>
-  
-  
-  
-  
-  
-  
-  
-
 
   <div id="chat-box" style="display:none;">
     <h2 id="current-room-name"></h2>
-    <div id="messages"></div>
-    <input type="text" id="message-input" placeholder="Type a message..." />
-    <button onclick="sendMessage()">Send</button>
+    <div id="messages" style="height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px;"></div>
+    <input type="text" id="message-input" placeholder="Type a message..." style="width: 80%;">
+    <button type="button" class="join" onclick="sendMessage()">Send</button>
   </div>
 
-  <div style="display: flex; justify-content: space-between; align-items: center;">
-    <form action="/logout" method="GET">
-      <button id = "logOutbtn" type="submit" onclick = "logOut()">Logout</button>
+  <div style="margin-top: 20px;">
+    <form action="/logout">
+      <button class="leave" type="submit">Logout</button>
     </form>
   </div>
-  
+
+  <form id="hidden-delete-form" action="/delete_room" method="POST" style="display: none;">
+    <input type="hidden" name="room" id="hidden-delete-room">
+  </form>
 
   <script>
     const socket = io();
-    let currentRoom = "";
+    let currentRoom = '';
+    const username = "{{ username }}";
 
-  function joinRoom(room) {
-    if(currentRoom == room ) {
-      return // trying to join same room
-    }
-    if (currentRoom) {
-      socket.emit("leave_room", { room: currentRoom, username: "{{ username }}" });
-    }
-    currentRoom = room;
-    document.getElementById("chat-box").style.display = 'block';
-    document.getElementById("current-room-name").innerText = `Room: ${room}`;
-    document.getElementById("messages").innerHTML = '';
-    fetch(`/history/${room}`)
-      .then(res => res.json())
-      .then(data => {
-        const msgBox = document.getElementById("messages");
-        data.messages.forEach(entry => {
-          msgBox.innerHTML += `<div>${entry.msg}</div>`;
-        });
-
-        // Now emit join event AFTER loading history
-        socket.emit("join_room", { room: room, username: "{{ username }}" });
-        msgBox.scrollTop = msgBox.scrollHeight;
-      });
-
-}
-
-
-    function sendMessage() {
-      const msg = document.getElementById("message-input").value;
-      if (msg.trim() !== "") {
-        socket.emit("send_message", {
-          room: currentRoom,
-          msg: msg,
-          username: "{{ username }}"
-        });
-        document.getElementById("message-input").value = "";
-      }
-    }
-
-
-    function logOut() {
-    if (confirm("Are you sure you want to log out?")) {
-      if (typeof socket !== "undefined") {
-        socket.disconnect();
-      }
-      window.location.href = "/logout";
-    }
-  }
-
-    socket.on("message", function (data) {
-      const msgBox = document.getElementById("messages");
-      msgBox.innerHTML += `<div>${data.msg}</div>`;
-      msgBox.scrollTop = msgBox.scrollHeight;
+    // Auto-load chat if room parameter exists
+    document.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const room = urlParams.get('room');
+      if (room) loadchat(room);
     });
 
-    socket.on('connect', () => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const room = urlParams.get('room');
-    if (room) {
-        currentRoom = room;
-        socket.emit('join_room', { username, room });
+    function joinRoom(room) {
+      fetch('/join', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({ room })
+      }).then(() => window.location.href = `/?room=${encodeURIComponent(room)}`);
     }
-});
 
-
-socket.on("room_deleted", function (data) {
-    const roomItem = document.getElementById("room-" + data.room);
-    if (roomItem) {
-      roomItem.remove();
-    }
+    function leaveRoom(room) {
+      socket.emit('leave_room', { room: currentRoom, username });
+      fetch('/leave', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: new URLSearchParams({ room })
+      }).then(() => {
+    // Clear room from URL and reload
+    window.history.replaceState({}, '', window.location.pathname);
+    window.location.reload();
   });
-
-  socket.on("room_created", function (data) {
-    const roomList = document.getElementById("room-list");
-    if (document.getElementById("room-" + data.room)) return; // Avoid duplicates
-
-    const li = document.createElement("li");
-    li.id = "room-" + data.room;
-    li.style = "display: flex; align-items: center; gap: 10px; margin-bottom: 10px; width: 100%;";
-
-    const nameBtn = document.createElement("button");
-    nameBtn.disabled = true;
-    nameBtn.innerText = data.room;
-    nameBtn.style = "flex: 0 0 80%; text-align: left;";
-
-    const joinBtn = document.createElement("button");
-    joinBtn.innerText = "Join";
-    joinBtn.style = "flex: 0 0 10%;";
-    joinBtn.onclick = () => joinRoom(data.room);
-
-    li.appendChild(nameBtn);
-    li.appendChild(joinBtn);
-
-    // If current user is the creator, allow delete
-    if (data.creator_id == {{ user_id }}) {
-      const delBtn = document.createElement("button");
-      delBtn.innerText = "Delete";
-      delBtn.style = "flex: 0 0 10%;";
-      delBtn.onclick = () => deleteRoom(data.room);
-      li.appendChild(delBtn);
     }
 
-    roomList.appendChild(li);
-  });
-
-  function deleteRoom(roomName) {
-    if (confirm(`Are you sure you want to delete ${roomName}?`)) {
-      document.getElementById("hidden-delete-room").value = roomName;
-      document.getElementById("hidden-delete-form").submit();
+    function loadchat(room) {
+      if (currentRoom == room) return;
+      else if(currentRoom){
+        document.getElementById("chat-box").style.display = 'none';
+        document.getElementById("current-room-name").innerText = '';
+        document.getElementById("messages").innerHTML = '';
+      }
+      // Join new room
+      currentRoom = room;
+      socket.emit('join_room', { room, username });
+      
+      // Update UI
+      document.getElementById('chat-box').style.display = 'block';
+      document.getElementById('current-room-name').textContent = `Room: ${room}`;
+      
+      // Load history
+      fetch(`/history/${room}`)
+        .then(res => res.json())
+        .then(data => {
+          const messages = document.getElementById('messages');
+          messages.innerHTML = data.messages.map(m => `<div>${m.msg}</div>`).join('');
+          messages.scrollTop = messages.scrollHeight;
+        });
     }
-  }
+
+    function sendMessage() {
+      const input = document.getElementById('message-input');
+      const msg = input.value.trim();
+      if (msg) {
+        socket.emit('send_message', {
+          room: currentRoom,
+          msg: msg,
+          username: username
+        });
+        input.value = '';
+      }
+    }
+
+    function deleteRoom(room) {
+      if (confirm(`Delete ${room} permanently?`)) {
+        document.getElementById('hidden-delete-room').value = room;
+        document.getElementById('hidden-delete-form').submit();
+      }
+    }
+
+    // Socket listeners
+    socket.on('message', data => {
+      const messages = document.getElementById('messages');
+      messages.innerHTML += `<div>${data.msg}</div>`;
+      messages.scrollTop = messages.scrollHeight;
+    });
+
+    socket.on('room_created', data => {
+      if (document.getElementById(`room-${data.room}`)) return;
+      
+      const li = document.createElement('li');
+      li.id = `room-${data.room}`;
+      li.style = "display: flex; align-items: center; gap: 10px; margin-bottom: 10px;";
+      
+      li.innerHTML = `
+        <button style="flex: 1; text-align: left;" disabled>${data.room}</button>
+        <button class="join" onclick="joinRoom('${data.room}')">Join</button>
+        ${data.creator_id === {{ user_id }} ? 
+          `<button class="delete" onclick="deleteRoom('${data.room}')">Delete</button>` : ''}
+      `;
+      
+      document.getElementById('room-list').appendChild(li);
+    });
+
+    socket.on('room_deleted', data => {
+      const elem = document.getElementById(`room-${data.room}`);
+      if (elem) elem.remove();
+      if (currentRoom === data.room) {
+        document.getElementById('chat-box').style.display = 'none';
+        currentRoom = '';
+      }
+    });
   </script>
 </body>
 </html>
-
